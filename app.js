@@ -27,8 +27,16 @@ app.get("/", (req, res) => {
 const startServer = async () => {
   await connectToDatabase();
 
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`Subscription Tracker API is running on http://localhost:${PORT}`);
+  });
+
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`Port ${PORT} is already in use. Please free the port and try again.`);
+      process.exit(1);
+    }
+    throw err;
   });
 };
 
