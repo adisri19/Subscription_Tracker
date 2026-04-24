@@ -1,4 +1,6 @@
-import subscription from "../models/subscription.model.js";
+import Subscription from "../models/subscription.model.js";
+import { SERVER_URL } from "../config/env.js";
+import { workflowClient } from "../config/upstash.js";
 
 export const createSubscription = async (req, res, next) => {
     try {
@@ -11,11 +13,10 @@ export const createSubscription = async (req, res, next) => {
             paymentmethod,
             status,
             startdate,
-            renewaldate,
-            userID
+            renewaldate
         } = req.body;
 
-        const newSubscription = await subscription.create({
+        const newSubscription = await Subscription.create({
             name,
             price,
             currency,
@@ -25,7 +26,18 @@ export const createSubscription = async (req, res, next) => {
             status,
             startdate,
             renewaldate,
-            userID
+            userID: req.user
+        });
+
+        await workflowClient.trigger({
+            url: `${SERVER_URL}/api/v1/workflow/subscription/reminder`,
+            body: {
+                subscriptionId: newSubscription._id.toString()
+            },
+            headers: {
+                "content-type": "application/json"
+            },
+            retries: 0
         });
 
         res.status(201).json({
@@ -45,7 +57,7 @@ export const getUserSubscriptions = async (req, res, next) => {
             throw error;
         }
 
-        const subscriptions = await subscription.find({ userID: req.params.id });
+        const subscriptions = await Subscription.find({ userID: req.params.id });
 
         res.status(200).json({
             success: true,
