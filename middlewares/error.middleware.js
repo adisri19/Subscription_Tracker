@@ -28,7 +28,14 @@ const errormiddleware = (err, req, res, next) => {
         });
     }
     catch(error){
-        next(error);
+        console.error("Error middleware failure:", error);
+        if (typeof next === "function") {
+            return next(error);
+        }
+        return res.status(500).json({
+            success: false,
+            error: error.message || 'Server Error'
+        });
     }   
 };
 

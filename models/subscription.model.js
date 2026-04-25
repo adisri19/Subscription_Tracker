@@ -68,7 +68,7 @@ const subscriptionSchema = new mongoose.Schema({
     timestamps: true
 });
 
-subscriptionSchema.pre('save', function(next){    
+subscriptionSchema.pre('save', function(){    
     if(!this.renewaldate){
         const renewalPeriods = {
             "Daily": 1,
@@ -84,7 +84,6 @@ subscriptionSchema.pre('save', function(next){
     if(this.renewaldate < new Date()){
         this.status = 'Inactive';
     }
-    next();
 });
 const Subscription = mongoose.model('Subscription', subscriptionSchema);
 export default Subscription;

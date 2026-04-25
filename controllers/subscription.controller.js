@@ -9,44 +9,81 @@ export const createSubscription = async (req, res, next) => {
             price,
             currency,
             duration,
+            frequency,
             category,
             paymentmethod,
+            paymentMethod,
             status,
             startdate,
-            renewaldate
+            startDate,
+            renewaldate,
+            renewalDate
         } = req.body;
 
-        const newSubscription = await Subscription.create({
+        const normalizedSubscription = {
             name,
             price,
             currency,
-            duration,
+            duration: duration || frequency,
             category,
-            paymentmethod,
+            paymentmethod: paymentmethod || paymentMethod,
             status,
-            startdate,
-            renewaldate,
+            startdate: startdate || startDate,
+            renewaldate: renewaldate || renewalDate,
             userID: req.user
-        });
+        };
 
-        await workflowClient.trigger({
-            url: `${SERVER_URL}/api/v1/workflow/subscription/reminder`,
-            body: {
-                subscriptionId: newSubscription._id.toString()
-            },
-            headers: {
-                "content-type": "application/json"
-            },
-            retries: 0
-        });
+        const newSubscription = await Subscription.create(normalizedSubscription);
+
+        let workflowRunId = null;
+
+        try {
+            const workflowRun = await workflowClient.trigger({
+                url: `${SERVER_URL}/api/v1/workflow/subscription/reminder`,
+                body: {
+                    subscriptionId: newSubscription._id.toString()
+                },
+                headers: {
+                    "content-type": "application/json"
+                },
+                retries: 0
+            });
+
+            workflowRunId = workflowRun.workflowRunId;
+        } catch (workflowError) {
+            console.error("Failed to schedule subscription reminder:", workflowError.message);
+        }
+
+        const subscriptionResponse = {
+            ...newSubscription.toObject(),
+            frequency: newSubscription.duration,
+            paymentMethod: newSubscription.paymentmethod,
+            startDate: newSubscription.startdate,
+            renewalDate: newSubscription.renewaldate,
+            user: newSubscription.userID
+        };
+
+        delete subscriptionResponse.duration;
+        delete subscriptionResponse.paymentmethod;
+        delete subscriptionResponse.startdate;
+        delete subscriptionResponse.renewaldate;
+        delete subscriptionResponse.userID;
 
         res.status(201).json({
             success: true,
-            message: "Subscription created successfully",
-            data: newSubscription
+            data: {
+                subscription: subscriptionResponse,
+                workflowRunId
+            }
         });
     } catch (error) {
-        next(error);
+        if (typeof next === "function") {
+            return next(error);
+        }
+        return res.status(error.statusCode || 500).json({
+            success: false,
+            error: error.message || "Server Error"
+        });
     }
 };
 export const getUserSubscriptions = async (req, res, next) => {
@@ -64,6 +101,12 @@ export const getUserSubscriptions = async (req, res, next) => {
             data: subscriptions
         });
     } catch (error) {
-        next(error);
+        if (typeof next === "function") {
+            return next(error);
+        }
+        return res.status(error.statusCode || 500).json({
+            success: false,
+            error: error.message || "Server Error"
+        });
     }
 };

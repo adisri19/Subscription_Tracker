@@ -15,6 +15,12 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+app.use((req, res, next) => {
+  const [path, query] = req.url.split("?");
+  const cleanPath = path.replace(/(%0A|%0D|\s)+$/gi, "");
+  req.url = query ? `${cleanPath}?${query}` : cleanPath;
+  next();
+});
 app.use(arcjetMiddleware);
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/users", userRouter);
