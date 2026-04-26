@@ -38,7 +38,7 @@ export const sendReminders = serve(async (context) => {
 
     const subscription = await fetchSubscription(context, subscriptionId);
 
-    if (!subscription || subscription.status !== "Active") {
+    if (!subscription || subscription.status.toLowerCase() !== "active") {
         return;
     }
 
