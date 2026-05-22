@@ -4,6 +4,8 @@ A production-minded backend API for managing personal subscriptions, authenticat
 
 Built with `Node.js`, `Express`, `MongoDB`, `Mongoose`, `JWT`, and `Arcjet`, this project focuses on clean API structure, authentication flow, database modeling, and security-first middleware.
 
+**Last Updated:** May 22, 2026
+
 ## Overview
 
 Subscription Tracker is designed to help users manage recurring services like Netflix, Spotify, gym memberships, SaaS plans, and other paid subscriptions from a single backend system.
