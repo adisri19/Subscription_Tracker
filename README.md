@@ -6,7 +6,7 @@ Built with `Node.js`, `Express`, `MongoDB`, `Mongoose`, `JWT`, and `Arcjet`, thi
 
 **Last Updated:** May 22,2026
 
-## Overview
+##Overview
 
 Subscription Tracker is designed to help users manage recurring services like Netflix, Spotify, gym memberships, SaaS plans, and other paid subscriptions from a single backend system.
 
