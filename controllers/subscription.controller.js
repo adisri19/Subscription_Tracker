@@ -234,3 +234,33 @@ export const cancelSubscription = async (req, res, next) => {
         next(error);
     }
 };
+
+export const getUpcomingRenewals = async (req, res, next) => {
+    try {
+        const days = Math.min(parseInt(req.query.days) || 30, 365);
+        const now = new Date();
+        const futureDate = dayjs().add(days, 'day').toDate();
+
+        const subscriptions = await Subscription.find({
+            userId: req.user,
+            status: 'Active',
+            renewalDate: { $gte: now, $lte: futureDate },
+        }).sort({ renewalDate: 1 });
+
+        const enriched = subscriptions.map(sub => ({
+            ...sub.toObject(),
+            daysUntilRenewal: dayjs(sub.renewalDate).diff(dayjs(), 'day'),
+        }));
+
+        res.status(200).json({
+            success: true,
+            data: {
+                count: enriched.length,
+                windowDays: days,
+                subscriptions: enriched,
+            },
+        });
+    } catch (error) {
+        next(error);
+    }
+};
