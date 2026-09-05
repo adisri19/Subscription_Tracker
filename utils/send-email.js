@@ -8,15 +8,15 @@ export const sendReminderEmail= async ({ to, type, subscription }) => {
         throw new Error('Missing required parameters: to, type and subscription are required');
     }
 
-    const user = subscription.userID || subscription.user;
-    const daysLeft = Number.parseInt(type, 10) || dayjs(subscription.renewaldate).diff(dayjs(), 'day');
+    const user = subscription.userId || subscription.userID || subscription.user;
+    const daysLeft = Number.parseInt(type, 10) || dayjs(subscription.renewalDate || subscription.renewaldate).diff(dayjs(), 'day');
     const mailInfo = {
         userName: user?.name || 'there',
         subscriptionName: subscription.name,
-        renewalDate: dayjs(subscription.renewaldate).format('MMMM D, YYYY'),
+        renewalDate: dayjs(subscription.renewalDate || subscription.renewaldate).format('MMMM D, YYYY'),
         planName: subscription.category,
         price: `${subscription.price} ${subscription.currency} (${subscription.duration})`,
-        paymentMethod: subscription.paymentmethod,
+        paymentMethod: subscription.paymentMethod || subscription.paymentmethod,
         accountSettingsLink: `${SERVER_URL}/subscriptions`,
         supportLink: `${SERVER_URL}/support`,
         daysLeft,
