@@ -23,6 +23,11 @@ const userSchema = new mongoose.Schema({
         trim: true,
         minLength: [6, 'User password must be at least 6 characters long'],
         maxLength: [100, 'User password must be less than 100 characters long']
+    },
+    role: {
+        type: String,
+        enum: ['user', 'admin'],
+        default: 'user'
     }
 }, {
     timestamps: true
