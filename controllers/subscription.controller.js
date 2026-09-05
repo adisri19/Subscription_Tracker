@@ -177,3 +177,26 @@ export const updateSubscription = async (req, res, next) => {
         next(error);
     }
 };
+
+export const deleteSubscription = async (req, res, next) => {
+    try {
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ success: false, error: 'Invalid subscription ID format' });
+        }
+
+        const subscription = await Subscription.findById(req.params.id);
+
+        if (!subscription) {
+            return res.status(404).json({ success: false, error: 'Subscription not found' });
+        }
+
+        if (subscription.userId.toString() !== req.user && req.userRole !== 'admin') {
+            return res.status(403).json({ success: false, error: 'Forbidden' });
+        }
+
+        await Subscription.findByIdAndDelete(req.params.id);
+        res.status(204).send();
+    } catch (error) {
+        next(error);
+    }
+};
