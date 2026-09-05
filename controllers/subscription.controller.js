@@ -62,3 +62,53 @@ export const getUserSubscriptions = async (req, res, next) => {
         next(error);
     }
 };
+
+export const getAllSubscriptions = async (req, res, next) => {
+    try {
+        const {
+            page = 1,
+            limit = 10,
+            status,
+            currency,
+            category,
+            duration,
+            sortBy = 'createdAt',
+            order = 'desc',
+        } = req.query;
+
+        const filter = {};
+        if (status) filter.status = status;
+        if (currency) filter.currency = currency;
+        if (category) filter.category = category;
+        if (duration) filter.duration = duration;
+
+        const skip = (Number(page) - 1) * Number(limit);
+        const sortOrder = order === 'asc' ? 1 : -1;
+
+        const [subscriptions, total] = await Promise.all([
+            Subscription.find(filter)
+                .populate('userId', 'name email')
+                .sort({ [sortBy]: sortOrder })
+                .skip(skip)
+                .limit(Number(limit)),
+            Subscription.countDocuments(filter),
+        ]);
+
+        res.status(200).json({
+            success: true,
+            data: {
+                subscriptions,
+                pagination: {
+                    total,
+                    page: Number(page),
+                    limit: Number(limit),
+                    totalPages: Math.ceil(total / Number(limit)),
+                    hasNextPage: skip + subscriptions.length < total,
+                    hasPrevPage: Number(page) > 1,
+                },
+            },
+        });
+    } catch (error) {
+        next(error);
+    }
+};
