@@ -1,13 +1,12 @@
 import mongoose from "mongoose";
 import { DB_URL } from "../config/env.js";
 
-if (!DB_URL) {
-  throw new Error(
-    "DB_URL is not defined in environment variables inside .env<development/production>.local file"
-  );
-}
-
 const connectToDatabase = async () => {
+  if (!DB_URL) {
+    throw new Error(
+      "DB_URL is not defined in environment variables inside .env<development/production>.local file"
+    );
+  }
   try {
     const connection = await mongoose.connect(DB_URL);
     console.log(`MongoDB connected: ${connection.connection.name}`);
