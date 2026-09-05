@@ -44,25 +44,6 @@ export const createSubscription = async (req, res, next) => {
     }
 };
 
-export const getUserSubscriptions = async (req, res, next) => {
-    try {
-        if (req.user !== req.params.id && req.userRole !== 'admin') {
-            const error = new Error("You are not the owner of this account");
-            error.statusCode = 403;
-            throw error;
-        }
-
-        const subscriptions = await Subscription.find({ userId: req.params.id });
-
-        res.status(200).json({
-            success: true,
-            data: subscriptions
-        });
-    } catch (error) {
-        next(error);
-    }
-};
-
 export const getAllSubscriptions = async (req, res, next) => {
     try {
         const {
@@ -264,3 +245,227 @@ export const getUpcomingRenewals = async (req, res, next) => {
         next(error);
     }
 };
+
+export const getUserSubscriptions = async (req, res, next) => {
+    try {
+        if (req.user !== req.params.id && req.userRole !== 'admin') {
+            const error = new Error("You are not the owner of this account");
+            error.statusCode = 403;
+            throw error;
+        }
+
+        const {
+            page = 1,
+            limit = 10,
+            status,
+            category,
+            currency,
+            sortBy = 'createdAt',
+            order = 'desc',
+        } = req.query;
+
+        const filter = { userId: req.params.id };
+        if (status) filter.status = status;
+        if (category) filter.category = category;
+        if (currency) filter.currency = currency;
+
+        const skip = (Number(page) - 1) * Number(limit);
+        const sortOrder = order === 'asc' ? 1 : -1;
+
+        const [subscriptions, total] = await Promise.all([
+            Subscription.find(filter)
+                .sort({ [sortBy]: sortOrder })
+                .skip(skip)
+                .limit(Number(limit)),
+            Subscription.countDocuments(filter),
+        ]);
+
+        res.status(200).json({
+            success: true,
+            data: {
+                subscriptions,
+                pagination: {
+                    total,
+                    page: Number(page),
+                    limit: Number(limit),
+                    totalPages: Math.ceil(total / Number(limit)),
+                    hasNextPage: skip + subscriptions.length < total,
+                    hasPrevPage: Number(page) > 1,
+                },
+            },
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getAnalyticsSummary = async (req, res, next) => {
+    try {
+        const userId = new mongoose.Types.ObjectId(req.user);
+
+        const normalizationFactors = {
+            Daily: 30,
+            Weekly: 4.33,
+            Monthly: 1,
+            Quarterly: 0.333,
+            Yearly: 0.0833,
+        };
+
+        const pipeline = [
+            { $match: { userId, status: 'Active' } },
+            {
+                $addFields: {
+                    monthlyEquivalent: {
+                        $switch: {
+                            branches: Object.entries(normalizationFactors).map(([dur, factor]) => ({
+                                case: { $eq: ['$duration', dur] },
+                                then: { $multiply: ['$price', factor] },
+                            })),
+                            default: '$price',
+                        },
+                    },
+                },
+            },
+            {
+                $facet: {
+                    summary: [
+                        {
+                            $group: {
+                                _id: null,
+                                totalSubscriptions: { $sum: 1 },
+                                totalMonthlySpend: { $sum: '$monthlyEquivalent' },
+                                totalYearlySpend: { $sum: { $multiply: ['$monthlyEquivalent', 12] } },
+                            },
+                        },
+                    ],
+                    byCategory: [
+                        {
+                            $group: {
+                                _id: '$category',
+                                count: { $sum: 1 },
+                                monthlySpend: { $sum: '$monthlyEquivalent' },
+                            },
+                        },
+                        { $sort: { monthlySpend: -1 } },
+                    ],
+                    byCurrency: [
+                        {
+                            $group: {
+                                _id: '$currency',
+                                count: { $sum: 1 },
+                                totalMonthlySpend: { $sum: '$monthlyEquivalent' },
+                            },
+                        },
+                    ],
+                    mostExpensive: [
+                        { $sort: { price: -1 } },
+                        { $limit: 1 },
+                        { $project: { name: 1, price: 1, currency: 1, duration: 1 } },
+                    ],
+                    nextRenewal: [
+                        {
+                            $match: {
+                                renewalDate: { $gte: new Date() },
+                            },
+                        },
+                        { $sort: { renewalDate: 1 } },
+                        { $limit: 1 },
+                        { $project: { name: 1, renewalDate: 1, price: 1, currency: 1 } },
+                    ],
+                },
+            },
+        ];
+
+        const [result] = await Subscription.aggregate(pipeline);
+
+        const summary = result?.summary?.[0] || { totalSubscriptions: 0, totalMonthlySpend: 0, totalYearlySpend: 0 };
+
+        const formattedByCategory = (result?.byCategory || []).map(item => ({
+            category: item._id,
+            count: item.count,
+            monthlySpend: parseFloat(Number(item.monthlySpend).toFixed(2)),
+        }));
+
+        const formattedByCurrency = (result?.byCurrency || []).map(item => ({
+            currency: item._id,
+            count: item.count,
+            totalMonthlySpend: parseFloat(Number(item.totalMonthlySpend).toFixed(2)),
+        }));
+
+        res.status(200).json({
+            success: true,
+            data: {
+                summary: {
+                    totalActiveSubscriptions: summary.totalSubscriptions,
+                    estimatedMonthlySpend: parseFloat(Number(summary.totalMonthlySpend).toFixed(2)),
+                    estimatedYearlySpend: parseFloat(Number(summary.totalYearlySpend).toFixed(2)),
+                },
+                byCategory: formattedByCategory,
+                byCurrency: formattedByCurrency,
+                mostExpensive: result?.mostExpensive?.[0] || null,
+                nextRenewal: result?.nextRenewal?.[0] || null,
+            },
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getMonthlyTrend = async (req, res, next) => {
+    try {
+        const months = Math.min(parseInt(req.query.months) || 6, 12);
+        const userId = new mongoose.Types.ObjectId(req.user);
+        const startDate = dayjs().subtract(months, 'month').startOf('month').toDate();
+
+        const pipeline = [
+            {
+                $match: {
+                    userId,
+                    createdAt: { $gte: startDate },
+                },
+            },
+            {
+                $group: {
+                    _id: {
+                        year: { $year: '$createdAt' },
+                        month: { $month: '$createdAt' },
+                    },
+                    subscriptionsAdded: { $sum: 1 },
+                    totalSpendAdded: { $sum: '$price' },
+                },
+            },
+            { $sort: { '_id.year': 1, '_id.month': 1 } },
+            {
+                $project: {
+                    _id: 0,
+                    period: {
+                        $concat: [
+                            { $toString: '$_id.year' },
+                            '-',
+                            {
+                                $cond: [
+                                    { $lt: ['$_id.month', 10] },
+                                    { $concat: ['0', { $toString: '$_id.month' }] },
+                                    { $toString: '$_id.month' },
+                                ],
+                            },
+                        ],
+                    },
+                    subscriptionsAdded: 1,
+                    totalSpendAdded: { $round: ['$totalSpendAdded', 2] },
+                },
+            },
+        ];
+
+        const trend = await Subscription.aggregate(pipeline);
+
+        res.status(200).json({
+            success: true,
+            data: { months, trend },
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+
