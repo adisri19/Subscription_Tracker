@@ -7,7 +7,7 @@ const REMINDERS = [7, 5, 2, 1];
 
 const fetchSubscription = async (context, subscriptionId) => {
     return await context.run("get subscription", async () => {
-        return Subscription.findById(subscriptionId).populate("userID", "name email");
+        return Subscription.findById(subscriptionId).populate("userId", "name email");
     });
 };
 
@@ -21,7 +21,7 @@ const triggerReminder = async (context, label, subscription) => {
         console.log(`Triggering ${label} reminder for subscription ${subscription._id}`);
 
         await sendReminderEmail({
-            to: subscription.userID.email,
+            to: subscription.userId?.email,
             type: label,
             subscription,
         });
@@ -42,7 +42,7 @@ export const sendReminders = serve(async (context) => {
         return;
     }
 
-    const renewalDate = dayjs(subscription.renewaldate);
+    const renewalDate = dayjs(subscription.renewalDate);
 
     if (renewalDate.isBefore(dayjs())) {
         console.log(`Renewal date has passed for subscription ${subscriptionId}. Stopping workflow.`);
