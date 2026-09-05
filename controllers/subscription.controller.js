@@ -138,3 +138,42 @@ export const getSubscriptionById = async (req, res, next) => {
         next(error);
     }
 };
+
+export const updateSubscription = async (req, res, next) => {
+    try {
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ success: false, error: 'Invalid subscription ID format' });
+        }
+
+        const subscription = await Subscription.findById(req.params.id);
+
+        if (!subscription) {
+            return res.status(404).json({ success: false, error: 'Subscription not found' });
+        }
+
+        if (subscription.userId.toString() !== req.user) {
+            return res.status(403).json({ success: false, error: 'Forbidden' });
+        }
+
+        const allowedUpdates = ['name', 'price', 'currency', 'category', 'paymentMethod', 'status'];
+        const updates = Object.keys(req.body)
+            .filter(key => allowedUpdates.includes(key))
+            .reduce((obj, key) => { obj[key] = req.body[key]; return obj; }, {});
+
+        if (Object.keys(updates).length === 0) {
+            return res.status(400).json({ success: false, error: 'No valid fields provided for update' });
+        }
+
+        Object.assign(subscription, updates);
+
+        if (updates.status === 'Cancelled') {
+            subscription.renewalDate = null;
+        }
+
+        await subscription.save();
+
+        res.status(200).json({ success: true, data: subscription });
+    } catch (error) {
+        next(error);
+    }
+};
