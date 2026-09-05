@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import dayjs from "dayjs";
 
 const subscriptionSchema = new mongoose.Schema({
     name: {
@@ -8,82 +9,92 @@ const subscriptionSchema = new mongoose.Schema({
         minLength: [3, 'Subscription name must be at least 3 characters long'],
         maxLength: [50, 'Subscription name must be less than 50 characters long']       
     },
-    price:{
+    price: {
         type: Number,
         required: [true, 'Subscription price not defined'],
         min: [0, 'Subscription price must be a positive number']
     }, 
-    currency:{
+    currency: {
         type: String,
-        enum: ['USD', 'EUR', 'GBP', 'JPY', 'CNY' ,'INR'],
-        default:'INR'
+        enum: ['USD', 'EUR', 'GBP', 'JPY', 'CNY', 'INR'],
+        default: 'INR'
     },
-    duration:{
+    duration: {
         type: String,
-        enum: ["Daily","Weekly","Monthly", "Quarterly", "Yearly"],
-        default:'Monthly'
+        enum: ["Daily", "Weekly", "Monthly", "Quarterly", "Yearly"],
+        default: 'Monthly'
     },
-    category:{
+    category: {
         type: String,
         enum: ["Basic", "Standard", "Premium"],
-        default:'Standard'
+        default: 'Standard'
     },
-    paymentmethod:{
+    paymentMethod: {
         type: String,
-        enum: ["Credit Card", "Debit Card", "PayPal", "Bank Transfer","UPI"],
-        default:'Credit Card',
+        enum: ["Credit Card", "Debit Card", "PayPal", "Bank Transfer", "UPI"],
+        default: 'Credit Card',
         required: [true, 'Subscription payment method not defined'],
         trim: true
     },
-    status:{
+    status: {
         type: String,
         enum: ["Active", "Inactive", "Cancelled"],
-        default:'Active'
+        default: 'Active'
     },
-    startdate:{
+    startDate: {
         type: Date,
         required: [true, 'Subscription start date not defined'],
         validate: {
-        validator:(value)=>value >= new Date(),
-        message:'Subscription start date must be in the future'
+            validator: (value) => {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                return value >= today;
+            },
+            message: 'Start date cannot be in the past'
         }
     },
-    renewaldate:{
+    renewalDate: {
         type: Date,
-        required: [true, 'Subscription renewal date not defined'],
         validate: {
-        validator:function(value){
-            return value > this.startdate;
-        },
-        message:'Subscription renewal date must be after the start date'
+            validator: function(value) {
+                if (!value) return true;
+                return value > this.startDate;
+            },
+            message: 'Subscription renewal date must be after the start date'
         }
     },
-    userID:{
+    userId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         required: [true, 'Subscription user ID not defined'],
         index: true
     }
-},  {
+}, {
     timestamps: true
 });
 
-subscriptionSchema.pre('save', function(){    
-    if(!this.renewaldate){
-        const renewalPeriods = {
-            "Daily": 1,
-            "Weekly": 7,
-            "Monthly": 30,
-            "Quarterly": 90,
-            "Yearly": 365
-        };
-        this.renewaldate= new Date(this.startdate);
-        this.renewaldate.setDate(this.renewaldate.getDate() + renewalPeriods[this.duration]);
+subscriptionSchema.pre('save', function() {    
+    const renewalPeriodMap = {
+        Daily: { amount: 1, unit: 'day' },
+        Weekly: { amount: 1, unit: 'week' },
+        Monthly: { amount: 1, unit: 'month' },
+        Quarterly: { amount: 3, unit: 'month' },
+        Yearly: { amount: 1, unit: 'year' },
+    };
+
+    if (!this.renewalDate && this.status !== 'Cancelled') {
+        const period = renewalPeriodMap[this.duration];
+        if (period && this.startDate) {
+            this.renewalDate = dayjs(this.startDate).add(period.amount, period.unit).toDate();
+        }
     }
-    //if renewal date has passed , set status to inactive
-    if(this.renewaldate < new Date()){
+
+    // if renewal date has passed, set status to inactive
+    if (this.renewalDate && this.renewalDate < new Date()) {
         this.status = 'Inactive';
     }
 });
+
 const Subscription = mongoose.model('Subscription', subscriptionSchema);
 export default Subscription;
+
