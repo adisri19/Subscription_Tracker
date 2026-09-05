@@ -112,3 +112,29 @@ export const getAllSubscriptions = async (req, res, next) => {
         next(error);
     }
 };
+
+export const getSubscriptionById = async (req, res, next) => {
+    try {
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ success: false, error: 'Invalid subscription ID format' });
+        }
+
+        const subscription = await Subscription.findById(req.params.id).populate('userId', 'name email');
+
+        if (!subscription) {
+            return res.status(404).json({ success: false, error: 'Subscription not found' });
+        }
+
+        const ownerId = subscription.userId?._id
+            ? subscription.userId._id.toString()
+            : subscription.userId.toString();
+
+        if (ownerId !== req.user && req.userRole !== 'admin') {
+            return res.status(403).json({ success: false, error: 'Forbidden: you do not own this subscription' });
+        }
+
+        res.status(200).json({ success: true, data: subscription });
+    } catch (error) {
+        next(error);
+    }
+};
