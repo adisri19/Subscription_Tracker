@@ -9,8 +9,12 @@ import workflowRouter from "./routes/workflow.routes.js";
 import connectToDatabase from "./database/mongodb.js";
 import errormiddleware from "./middlewares/error.middleware.js";
 import arcjetMiddleware from "./middlewares/arcjet.middleware.js";
+import swaggerUi from "swagger-ui-express";
+import { swaggerSpec } from "./config/swagger.js";
 
 const app = express();
+
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -48,6 +52,8 @@ const startServer = async () => {
   });
 };
 
-startServer();
+if (process.env.NODE_ENV !== "test") {
+  startServer();
+}
 
 export default app;
